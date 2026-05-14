@@ -15,7 +15,7 @@ mapboxgl.accessToken = 'pk.eyJ1Ijoiam9uMDA5IiwiYSI6ImNtcDU4ZTEwNjB4MGEyc29ha3ZuM
 // Initialize the map
 const map = new mapboxgl.Map({
   container: 'map', // ID of the div where the map will render
-  style: 'mapbox://styles/jon009/cmp64x8ju000q01sp7wgm6mrx', // Map style
+  style: 'mapbox://styles/jon009/cmp65fllj007g01sp0jf68ecq', // Map style
   center: [-71.09415, 42.36027], // [longitude, latitude]
   zoom: 12, // Initial zoom level
   minZoom: 5, // Minimum allowed zoom
