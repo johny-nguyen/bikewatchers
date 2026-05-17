@@ -23,11 +23,12 @@ const map = new mapboxgl.Map({
   maxZoom: 18, // Maximum allowed zoom
 });
 
+let departuresByMinute = Array.from({ length: 1440 }, () => []);
+let arrivalsByMinute = Array.from({ length: 1440 }, () => []); 
 
 map.on('load', async () => {
   let stationFlow = d3.scaleQuantize().domain([0, 1]).range([0, 0.5, 1]);
-  let departuresByMinute = Array.from({ length: 1440 }, () => []);
-  let arrivalsByMinute = Array.from({ length: 1440 }, () => []);  
+   
   //code
   map.addSource('boston_route', {
   type: 'geojson',
@@ -79,14 +80,19 @@ map.on('load', async () => {
       (trip) => {
         trip.started_at = new Date(trip.started_at);
         trip.ended_at = new Date(trip.ended_at);
+
+        let startedMinutes = minutesSinceMidnight(trip.started_at);
+        //This function returns how many minutes have passed since `00:00` (midnight).
+        departuresByMinute[startedMinutes].push(trip);
+        //This adds the trip to the correct index in `departuresByMinute` so that later we can efficiently retrieve all trips that started at a specific time.
+        
+        let endedMinutes = minutesSinceMidnight(trip.ended_at);
+        arrivalsByMinute[endedMinutes].push(trip);
         return trip;
       },
     );
-
     
-
-
-    const stations = computeStationTraffic(jsonData.data.stations, trips);
+    const stations = computeStationTraffic(jsonData.data.stations);
     console.log('Stations Array:', stations);
 
 
@@ -149,10 +155,10 @@ map.on('load', async () => {
 
     function updateScatterPlot(timeFilter) {
     // Get only the trips that match the selected time filter
-    const filteredTrips = filterTripsbyTime(trips, timeFilter);
+  
 
     // Recompute station traffic based on the filtered trips
-    const filteredStations = computeStationTraffic(stations, filteredTrips);
+    const filteredStations = computeStationTraffic(stations, timeFilter);
 
     timeFilter === -1 ? radiusScale.range([0, 25]) : radiusScale.range([3, 50]);
     // Update the scatterplot by adjusting the radius of circles
@@ -203,18 +209,18 @@ function formatTime(minutes) {
 
 
 
-function computeStationTraffic(stations, trips) {
+function computeStationTraffic(stations, timeFilter = -1) {
   // Compute departures
   const departures = d3.rollup(
-    trips,
+    filterByMinute(departuresByMinute, timeFilter),
     (v) => v.length,
-    (d) => d.start_station_id,
+    (d) => d.start_station_id
   );
 
   const arrivals = d3.rollup(
-      trips,
+      filterByMinute(arrivalsByMinute, timeFilter),
       (v) => v.length,
-      (d) => d.end_station_id,
+      (d) => d.end_station_id
     );
 
   return stations.map((station) => {
@@ -248,4 +254,24 @@ function filterTripsbyTime(trips, timeFilter) {
           Math.abs(endedMinutes - timeFilter) <= 60
         );
       });
+}
+
+
+function filterByMinute(tripsByMinute, minute) {
+  if (minute === -1) {
+    return tripsByMinute.flat(); // No filtering, return all trips
+  }
+
+  // Normalize both min and max minutes to the valid range [0, 1439]
+  let minMinute = (minute - 60 + 1440) % 1440;
+  let maxMinute = (minute + 60) % 1440;
+
+  // Handle time filtering across midnight
+  if (minMinute > maxMinute) {
+    let beforeMidnight = tripsByMinute.slice(minMinute);
+    let afterMidnight = tripsByMinute.slice(0, maxMinute);
+    return beforeMidnight.concat(afterMidnight).flat();
+  } else {
+    return tripsByMinute.slice(minMinute, maxMinute).flat();
+  }
 }
